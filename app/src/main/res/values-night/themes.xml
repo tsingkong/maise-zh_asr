@@ -1,0 +1,13 @@
+<resources>
+
+    <!-- Dark mode: identical M3 DayNight parent (the library selects its dark
+         palette internally); only the status-bar icon appearance differs from
+         values/. Styles are wholly replaced per-configuration, so the night copy
+         must redefine Theme.Maise in full. -->
+    <style name="Theme.Maise" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+</resources>

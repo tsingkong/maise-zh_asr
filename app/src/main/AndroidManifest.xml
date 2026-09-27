@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
+    <!--
+      Package visibility is load-bearing for the RecognitionService: the
+      framework's checkPermissionAndStartDataDelivery() validates a binding
+      caller via an AppOps proxy-op that applies package-visibility filtering
+      with OUR uid. Callers this process cannot see are hard-denied with
+      ERROR_INSUFFICIENT_PERMISSIONS (logcat: "RecognitionService:
+      #startListening received from a caller without permission
+      android.permission.RECORD_AUDIO") before onStartListening records —
+      even when the caller holds RECORD_AUDIO.
+
+      QUERY_ALL_PACKAGES covers every caller but is Play-restricted (Kõnele's
+      was rejected), so instead declare the launcher intent: every launchable
+      app becomes visible. Verified on Android 17: launchable callers bind
+      fine; launcher-less service-only callers fail with
+      ERROR_INSUFFICIENT_PERMISSIONS. WhisperIMEplus ships QUERY_ALL_PACKAGES
+      for the same reason. Do not remove this <queries> element.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <!-- Strip permissions injected by onnxruntime-android: the AAR's telemetry is
+         opt-in (OrtEnvironment.setTelemetry), never enabled here, and the provider
+         is removed below. Removing INTERNET makes "fully offline" OS-enforced. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+
+    <!-- Mic is optional: the TTS engine works without one; all ASR entry points
+         degrade gracefully (ERROR_INSUFFICIENT_PERMISSIONS / ERROR_AUDIO). -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <application
+        android:allowBackup="true"
+        android:enableOnBackInvokedCallback="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:largeHeap="true"
+        android:name=".MaiseApplication"
+        android:theme="@style/Theme.Maise">
+
+        <!-- Prevent ONNX Runtime's telemetry from initializing at process start. -->
+        <provider
+            android:name="ai.onnxruntime.TelemetryInitializer"
+            tools:node="remove" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          Floating activity that handles apps calling
+          startActivityForResult(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).
+          Uses a dialog/floating theme so it appears as an overlay.
+        -->
+        <activity
+            android:name=".asr.MaiseRecognizeActivity"
+            android:exported="true"
+            android:noHistory="true"
+            android:theme="@style/Theme.Maise.Recognize"
+            android:configChanges="orientation|screenLayout|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          Engine-contract activities consumed by system Settings
+          (Settings > Accessibility > Text-to-speech output) and legacy TTS
+          clients. Both are invisible: they start, set a result, and finish
+          immediately. Without GET_SAMPLE_TEXT the "Listen to an example"
+          preview is silently dead; without CHECK_TTS_DATA Settings cannot
+          populate its language picker for this engine.
+        -->
+        <activity
+            android:name=".tts.GetSampleTextActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.speech.tts.engine.GET_SAMPLE_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".tts.CheckTtsDataActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.speech.tts.engine.CHECK_TTS_DATA" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".tts.MaiseTtsService"
+            android:label="@string/app_name"
+            android:exported="true"
+            android:permission="android.permission.BIND_TEXT_TO_SPEECH_SERVICE">
+            <intent-filter>
+                <action android:name="android.intent.action.TTS_SERVICE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech.tts"
+                android:resource="@xml/tts_engine" />
+        </service>
+
+        <service
+            android:name=".asr.MaiseInputMethodService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/maise_input_method" />
+        </service>
+
+        <service
+            android:name=".asr.MaiseAsrService"
+            android:label="@string/app_name"
+            android:exported="true"
+            android:directBootAware="true"
+            android:foregroundServiceType="microphone"
+            android:permission="android.permission.RECORD_AUDIO">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech"
+                android:resource="@xml/recognition_service" />
+        </service>
+
+    </application>
+
+</manifest>

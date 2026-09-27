@@ -1,0 +1,10 @@
+plugins {
+    id 'com.android.asset-pack'
+}
+
+assetPack {
+    packName = "open_phonemizer"
+    dynamicDelivery {
+        deliveryType = "install-time"
+    }
+}

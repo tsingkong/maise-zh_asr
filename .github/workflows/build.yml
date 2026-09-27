@@ -1,0 +1,123 @@
+name: Build
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/build.yml'
+      - 'app/**'
+      - 'open-phonemizer/**'
+      - 'kokoro/**'
+      - 'kitten/**'
+      - 'gradle/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/build.yml'
+      - 'app/**'
+      - 'open-phonemizer/**'
+      - 'kokoro/**'
+      - 'kitten/**'
+      - 'gradle/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java (Gradle cache)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;27.1.12297006"
+          yes | sdkmanager --licenses
+
+      - name: Decode Keystore File
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_UPLOAD_KEYSTORE }}
+        run: echo "$KEYSTORE" | base64 --decode > app/key.jks
+
+      - name: Create key.properties
+        run: |
+          echo "storeFile=key.jks" > key.properties
+          echo "storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}" >> key.properties
+          echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}" >> key.properties
+          echo "releasePassword=${{ secrets.ANDROID_KEY_PASSWORD }}" >> key.properties
+          echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" >> key.properties
+          echo "releaseAlias=${{ secrets.ANDROID_KEY_ALIAS }}" >> key.properties
+    
+      - name: Install bundletool
+        run: wget -q https://github.com/google/bundletool/releases/download/1.15.6/bundletool-all-1.15.6.jar -O bundletool.jar
+
+      - name: Build AAB
+        run: ./gradlew :app:bundleRelease
+
+      - name: Rename AAB
+        run: |
+          mkdir -p release
+          mv app/build/outputs/bundle/release/app-release.aab release/maise-release.aab
+
+      - name: Build APK from AAB
+        run: |
+          java -jar bundletool.jar build-apks \
+            --bundle=release/maise-release.aab \
+            --output=release/maise.apks \
+            --mode=universal \
+            --ks=app/key.jks \
+            "--ks-pass=pass:${{ secrets.ANDROID_STORE_PASSWORD }}" \
+            "--ks-key-alias=${{ secrets.ANDROID_KEY_ALIAS }}" \
+            "--key-pass=pass:${{ secrets.ANDROID_KEY_PASSWORD }}"
+          unzip release/maise.apks universal.apk -d release/
+          mv release/universal.apk release/maise-arm64-v8a.apk
+          rm release/maise.apks
+
+      - name: Upload Android
+        uses: actions/upload-artifact@v4
+        with:
+          name: maise-android
+          path: release
+          if-no-files-found: error
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: maise-apk
+          path: release/maise-arm64-v8a.apk
+          if-no-files-found: error
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: maise-aab
+          path: release/maise-release.aab
+          if-no-files-found: error
