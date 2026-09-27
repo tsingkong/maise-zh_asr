@@ -89,3 +89,10 @@ git clone https://github.com/Mobile-Artificial-Intelligence/maise.git
 The output APK will be at:
 - Release: `app/build/outputs/apk/release/app-release.apk`
 - Debug: `app/build/outputs/apk/debug/app-debug.apk`
+- 
+##  关于此 fork
+- 基于 maise (https://github.com/Mobile-Artificial-Intelligence/maise)
+- 为支持中文，将模型替换为 sherpa-onnx-paraformer-zh-2024-03-09
+- 因为 sherpa-onnx-paraformer-zh-2024-03-09 中的模型超过了 100M, github 不允许 git lfs 提交超过100M 的文件到 public fork，故此用复制的方式创建仓库
+- 去掉了 TTS模块，因为我不需要
+- maise 基础项目支持为 android 系统提供 SpeechRecognizer 服务
