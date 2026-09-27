@@ -14,3 +14,19 @@ fun copyAssetToFile(context: Context, assetPath: String): File {
     }
     return dest
 }
+
+
+/**
+ * 将 assets 中的文件复制到内部存储，返回文件路径
+ */
+fun copyAssetToFileReturnString(context: Context, filename: String): String {
+    val outFile = java.io.File(context.filesDir, filename)
+    if (outFile.exists() && outFile.length() > 0) return outFile.absolutePath
+
+    context.assets.open(filename).use { input ->
+        java.io.FileOutputStream(outFile).use { output ->
+            input.copyTo(output)
+        }
+    }
+    return outFile.absolutePath
+}

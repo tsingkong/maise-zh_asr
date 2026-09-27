@@ -38,7 +38,7 @@ class MainActivity : AppCompatActivity() {
         binding.viewPager.adapter = MainPagerAdapter(this)
 
         TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
-            tab.text = when (position) { 0 -> "TTS"; else -> "ASR" }
+            tab.text = when (position) { 0 -> "ASR"; else -> "ASR" }
         }.attach()
 
         // Prompt for microphone access on first launch so the background ASR
